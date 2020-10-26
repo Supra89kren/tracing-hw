@@ -1,9 +1,9 @@
 package com.course.bff.books.requests;
 
+import java.util.UUID;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
-import java.util.UUID;
 
 public class CreateBookCommand {
     @NotBlank

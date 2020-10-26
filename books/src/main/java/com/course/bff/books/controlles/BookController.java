@@ -17,6 +17,7 @@ import org.asynchttpclient.util.HttpConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.sleuth.annotation.NewSpan;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,6 +49,7 @@ public class BookController {
         this.redisTemplate = redisTemplate;
     }
 
+    @NewSpan("get books span")
     @GetMapping()
     public Collection<BookResponse> getBooks() {
         logger.info("Get book list");
@@ -81,6 +83,7 @@ public class BookController {
         return authorResponse;
     }
 
+    @NewSpan("sending book to redis")
     private void sendPushNotification(BookResponse bookResponse) {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         try {
