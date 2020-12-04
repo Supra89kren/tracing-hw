@@ -6,14 +6,14 @@ import com.course.bff.books.responses.BookResponse;
 import com.course.bff.books.services.BookService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.DefaultAsyncHttpClientConfig;
-import org.asynchttpclient.Dsl;
-import org.asynchttpclient.ListenableFuture;
-import org.asynchttpclient.Request;
-import org.asynchttpclient.RequestBuilder;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.util.HttpConstants;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,13 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-
 @RestController
 @RequestMapping("api/v1/books")
 public class BookController {
@@ -40,26 +33,36 @@ public class BookController {
     private final static Logger logger = LoggerFactory.getLogger(BookController.class);
     private final BookService bookService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final Counter counter;
 
     @Value("${redis.topic}")
     private String redisTopic;
+    private final Timer timer;
 
-    public BookController(BookService bookService, RedisTemplate<String, Object> redisTemplate) {
+    public BookController(BookService bookService,
+            RedisTemplate<String, Object> redisTemplate,
+            MeterRegistry meterRegistry,
+            @Value("${spring.application.name}") String applicationName) {
         this.bookService = bookService;
         this.redisTemplate = redisTemplate;
+        counter = meterRegistry.counter("request_count", "controller", "BookController", "service", applicationName);
+        timer = meterRegistry.timer("execution_duration", "controller", "BookController", "service", applicationName);
     }
 
     @NewSpan("get books span")
     @GetMapping()
     public Collection<BookResponse> getBooks() {
-        logger.info("Get book list");
-        List<BookResponse> bookResponses = new ArrayList<>();
-        this.bookService.getBooks().forEach(book -> {
-            BookResponse bookResponse = createBookResponse(book);
-            bookResponses.add(bookResponse);
-        });
+        counter.increment();
+        return timer.record(() -> {
+            logger.info("Get book list");
+            List<BookResponse> bookResponses = new ArrayList<>();
+            this.bookService.getBooks().forEach(book -> {
+                BookResponse bookResponse = createBookResponse(book);
+                bookResponses.add(bookResponse);
+            });
 
-        return bookResponses;
+            return bookResponses;
+        });
     }
 
     @GetMapping("/{id}")
@@ -69,7 +72,6 @@ public class BookController {
         if (bookSearch.isEmpty()) {
             throw new RuntimeException("Book isn't found");
         }
-
 
         return createBookResponse(bookSearch.get());
     }

@@ -6,14 +6,14 @@ import com.course.bff.authors.responses.AuthorResponse;
 import com.course.bff.authors.services.AuthorService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.DefaultAsyncHttpClientConfig;
-import org.asynchttpclient.Dsl;
-import org.asynchttpclient.ListenableFuture;
-import org.asynchttpclient.Request;
-import org.asynchttpclient.RequestBuilder;
-import org.asynchttpclient.Response;
-import org.asynchttpclient.util.HttpConstants;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,13 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-
 @RestController
 @RequestMapping("api/v1/authors")
 public class AuthorController {
@@ -43,23 +36,33 @@ public class AuthorController {
     private final static Logger logger = LoggerFactory.getLogger(AuthorController.class);
     private final AuthorService authorService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final Counter counter;
+    private final Timer timer;
 
-    public AuthorController(AuthorService authorService, RedisTemplate<String, Object> redisTemplate) {
+    public AuthorController(AuthorService authorService,
+            RedisTemplate<String, Object> redisTemplate,
+            MeterRegistry meterRegistry,
+            @Value("${spring.application.name}") String applicationName) {
         this.authorService = authorService;
         this.redisTemplate = redisTemplate;
+        counter = meterRegistry.counter("request_count", "controller", "AuthorController", "service", applicationName);
+        timer = meterRegistry.timer("execution_duration", "controller", "AuthorController", "service", applicationName);
     }
 
     @NewSpan("getAuthors span name")
     @GetMapping()
     public Collection<AuthorResponse> getAuthors() {
-        logger.info("Get authors");
-        List<AuthorResponse> authorResponses = new ArrayList<>();
-        this.authorService.getAuthors().forEach(author -> {
-            AuthorResponse authorResponse = createAuthorResponse(author);
-            authorResponses.add(authorResponse);
-        });
+        counter.increment();
+        return timer.record(() -> {
+            logger.info("Get authors");
+            List<AuthorResponse> authorResponses = new ArrayList<>();
+            this.authorService.getAuthors().forEach(author -> {
+                AuthorResponse authorResponse = createAuthorResponse(author);
+                authorResponses.add(authorResponse);
+            });
 
-        return authorResponses;
+            return authorResponses;
+        });
     }
 
     @GetMapping("/{id}")

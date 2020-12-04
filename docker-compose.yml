@@ -25,7 +25,7 @@ services:
     image: redis:latest
     container_name: bff-redis
     ports:
-      - 16379:6379
+      - 6379:6379
     networks:
       - mynet
 
@@ -33,9 +33,9 @@ services:
     image: supra89kren/bff-frontend:1.0
     container_name: bff-frontend-service
     ports:
-       - 8084:8084
+      - 8084:8084
     networks:
-        - mynet
+      - mynet
 
   storage:
     image: openzipkin/zipkin-mysql
@@ -98,6 +98,41 @@ services:
       - elasticsearch
     links:
       - elasticsearch
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus/config.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - cadvisor
+    networks:
+      - mynet
+  cadvisor:
+    image: gcr.io/google-containers/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+      - redis
+    networks:
+      - mynet
+  grafana:
+    image: grafana/grafana:5.2.4
+    env_file:
+      - ./grafana/config
+    ports:
+      - 3000:3000
+    networks:
+      - mynet
 networks:
   mynet:
     driver: bridge
